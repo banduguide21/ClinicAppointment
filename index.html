@@ -1,0 +1,445 @@
+import React, { useState, useEffect } from 'react';
+import { Clock, User, Bell, CheckCircle, AlertCircle, Plus, X, ChevronRight, Activity } from 'lucide-react';
+
+const ClinicQueueManager = () => {
+  const [view, setView] = useState('receptionist');
+  const [patients, setPatients] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    appointmentTime: '',
+    reason: ''
+  });
+
+  // Load patients from storage on mount
+  useEffect(() => {
+    const loadPatients = async () => {
+      try {
+        const result = await window.storage.get('clinic-patients');
+        if (result && result.value) {
+          setPatients(JSON.parse(result.value));
+        }
+      } catch (error) {
+        console.log('No existing patients found');
+      }
+    };
+    loadPatients();
+  }, []);
+
+  // Save patients to storage whenever they change
+  useEffect(() => {
+    const savePatients = async () => {
+      if (patients.length > 0) {
+        try {
+          await window.storage.set('clinic-patients', JSON.stringify(patients));
+        } catch (error) {
+          console.error('Error saving patients:', error);
+        }
+      }
+    };
+    savePatients();
+  }, [patients]);
+
+  const addPatient = () => {
+    if (formData.name && formData.phone && formData.appointmentTime) {
+      const newPatient = {
+        id: Date.now(),
+        ...formData,
+        status: 'scheduled',
+        addedAt: new Date().toISOString()
+      };
+      setPatients([...patients, newPatient]);
+      setFormData({ name: '', phone: '', appointmentTime: '', reason: '' });
+      setShowAddForm(false);
+    }
+  };
+
+  const checkInPatient = (id) => {
+    setPatients(patients.map(p => 
+      p.id === id ? { ...p, status: 'waiting', checkedInAt: new Date().toISOString() } : p
+    ));
+  };
+
+  const callNextPatient = () => {
+    const nextPatient = patients.find(p => p.status === 'waiting');
+    if (nextPatient) {
+      setPatients(patients.map(p =>
+        p.id === nextPatient.id ? { ...p, status: 'in-consultation', calledAt: new Date().toISOString() } : p
+      ));
+    }
+  };
+
+  const completeConsultation = (id) => {
+    setPatients(patients.map(p =>
+      p.id === id ? { ...p, status: 'completed', completedAt: new Date().toISOString() } : p
+    ));
+  };
+
+  const sendReminder = (patient) => {
+    alert(`Reminder sent to ${patient.name} at ${patient.phone}\n\n"Your appointment is scheduled for ${patient.appointmentTime}. Please arrive 10 minutes early."`);
+  };
+
+  const deletePatient = (id) => {
+    setPatients(patients.filter(p => p.id !== id));
+  };
+
+  const getStatusColor = (status) => {
+    switch(status) {
+      case 'scheduled': return 'bg-gradient-to-r from-blue-500 to-cyan-500 text-white';
+      case 'waiting': return 'bg-gradient-to-r from-amber-500 to-orange-500 text-white';
+      case 'in-consultation': return 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white';
+      case 'completed': return 'bg-gradient-to-r from-slate-400 to-slate-500 text-white';
+      default: return 'bg-gradient-to-r from-slate-400 to-slate-500 text-white';
+    }
+  };
+
+  const getStatusIcon = (status) => {
+    switch(status) {
+      case 'scheduled': return <Clock className="w-4 h-4" />;
+      case 'waiting': return <AlertCircle className="w-4 h-4" />;
+      case 'in-consultation': return <User className="w-4 h-4" />;
+      case 'completed': return <CheckCircle className="w-4 h-4" />;
+      default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const formatStatus = (status) => {
+    return status.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+  };
+
+  const waitingPatients = patients.filter(p => p.status === 'waiting');
+  const activePatient = patients.find(p => p.status === 'in-consultation');
+  const todayPatients = patients.filter(p => p.status !== 'completed');
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
+      {/* Header */}
+      <div className="bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center py-6">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg">
+                <Activity className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                  Clinic Queue Manager
+                </h1>
+                <p className="text-sm text-slate-500 mt-0.5">Real-time patient flow management</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setView('receptionist')}
+                className={`px-6 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
+                  view === 'receptionist'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/30 scale-105'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                Receptionist
+              </button>
+              <button
+                onClick={() => setView('doctor')}
+                className={`px-6 py-2.5 rounded-xl font-semibold transition-all duration-200 ${
+                  view === 'doctor'
+                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/30 scale-105'
+                    : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                }`}
+              >
+                Doctor
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {view === 'receptionist' ? (
+          <div className="space-y-6">
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-slate-500">Total Today</div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-cyan-600 bg-clip-text text-transparent">
+                  {todayPatients.length}
+                </div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-slate-500">Waiting</div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center">
+                    <AlertCircle className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                <div className="text-4xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
+                  {waitingPatients.length}
+                </div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-slate-500">In Consultation</div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-xl flex items-center justify-center">
+                    <User className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                <div className="text-4xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+                  {activePatient ? 1 : 0}
+                </div>
+              </div>
+              <div className="bg-white/80 backdrop-blur-sm p-6 rounded-2xl border border-white/20 shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="text-sm font-medium text-slate-500">Completed</div>
+                  <div className="w-10 h-10 bg-gradient-to-br from-slate-400 to-slate-500 rounded-xl flex items-center justify-center">
+                    <CheckCircle className="w-5 h-5 text-white" />
+                  </div>
+                </div>
+                <div className="text-4xl font-bold text-slate-600">
+                  {patients.filter(p => p.status === 'completed').length}
+                </div>
+              </div>
+            </div>
+
+            {/* Add Patient Button */}
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowAddForm(true)}
+                className="flex items-center gap-2 px-6 py-3.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 font-semibold hover:scale-105"
+              >
+                <Plus className="w-5 h-5" />
+                Add New Patient
+              </button>
+            </div>
+
+            {/* Add Patient Form */}
+            {showAddForm && (
+              <div className="bg-white/80 backdrop-blur-sm p-8 rounded-2xl border border-white/20 shadow-xl">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-xl font-bold text-slate-800">Add New Patient</h3>
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="text-slate-400 hover:text-slate-600 transition-colors p-2 hover:bg-slate-100 rounded-lg"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <input
+                    type="text"
+                    placeholder="Patient Name"
+                    value={formData.name}
+                    onChange={(e) => setFormData({...formData, name: e.target.value})}
+                    className="px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  />
+                  <input
+                    type="tel"
+                    placeholder="Phone Number"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                    className="px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  />
+                  <input
+                    type="time"
+                    value={formData.appointmentTime}
+                    onChange={(e) => setFormData({...formData, appointmentTime: e.target.value})}
+                    className="px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Reason for Visit"
+                    value={formData.reason}
+                    onChange={(e) => setFormData({...formData, reason: e.target.value})}
+                    className="px-4 py-3 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                  />
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setShowAddForm(false)}
+                    className="px-6 py-3 border-2 border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all duration-200 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={addPatient}
+                    className="px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 font-semibold"
+                  >
+                    Add Patient
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Patient Queue */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl overflow-hidden">
+              <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-blue-50/50">
+                <h3 className="text-xl font-bold text-slate-800">Patient Queue</h3>
+                <p className="text-sm text-slate-500 mt-1">Manage today's appointments</p>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {todayPatients.length === 0 ? (
+                  <div className="px-8 py-16 text-center text-slate-400">
+                    <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">No patients scheduled today</p>
+                  </div>
+                ) : (
+                  todayPatients.map((patient, index) => (
+                    <div key={patient.id} className="px-8 py-6 hover:bg-slate-50/50 transition-colors group">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-3">
+                            <span className="text-xl font-bold text-slate-800">{patient.name}</span>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold shadow-sm ${getStatusColor(patient.status)}`}>
+                              {getStatusIcon(patient.status)}
+                              {formatStatus(patient.status)}
+                            </span>
+                          </div>
+                          <div className="space-y-2 text-sm text-slate-600">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-slate-400" />
+                              <span className="font-medium">Appointment: {patient.appointmentTime}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Phone: {patient.phone}</span>
+                            </div>
+                            {patient.reason && (
+                              <div className="text-slate-500">Reason: {patient.reason}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 ml-6">
+                          {patient.status === 'scheduled' && (
+                            <>
+                              <button
+                                onClick={() => checkInPatient(patient.id)}
+                                className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:shadow-lg hover:shadow-emerald-500/30 transition-all duration-200 text-sm font-semibold whitespace-nowrap"
+                              >
+                                Check In
+                              </button>
+                              <button
+                                onClick={() => sendReminder(patient)}
+                                className="flex items-center gap-2 px-5 py-2.5 bg-white border-2 border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all duration-200 text-sm font-semibold whitespace-nowrap"
+                              >
+                                <Bell className="w-4 h-4" />
+                                Remind
+                              </button>
+                            </>
+                          )}
+                          {patient.status !== 'completed' && (
+                            <button
+                              onClick={() => deletePatient(patient.id)}
+                              className="px-5 py-2.5 bg-white border-2 border-rose-200 text-rose-700 rounded-xl hover:bg-rose-50 transition-all duration-200 text-sm font-semibold"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Current Patient */}
+            {activePatient && (
+              <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-2xl p-8 shadow-2xl shadow-emerald-500/30 border border-white/20">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                    <User className="w-6 h-6 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-white">Current Patient in Consultation</h3>
+                </div>
+                <div className="bg-white/95 backdrop-blur-sm rounded-xl p-6 mb-6 shadow-lg">
+                  <div className="text-3xl font-bold text-slate-800 mb-4">{activePatient.name}</div>
+                  <div className="space-y-2 text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">Phone:</span> {activePatient.phone}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-slate-400" />
+                      <span className="font-semibold">Appointment:</span> {activePatient.appointmentTime}
+                    </div>
+                    {activePatient.reason && (
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold">Reason:</span> {activePatient.reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  onClick={() => completeConsultation(activePatient.id)}
+                  className="w-full px-6 py-4 bg-white text-emerald-700 rounded-xl hover:bg-white/90 transition-all duration-200 font-bold text-lg shadow-lg flex items-center justify-center gap-2"
+                >
+                  Complete Consultation
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Waiting Queue */}
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/20 shadow-xl overflow-hidden">
+              <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-blue-50/50 flex justify-between items-center">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-800">Waiting Queue</h3>
+                  <p className="text-sm text-slate-500 mt-1">
+                    <span className="font-semibold text-amber-600">{waitingPatients.length}</span> patients waiting
+                  </p>
+                </div>
+                {!activePatient && waitingPatients.length > 0 && (
+                  <button
+                    onClick={callNextPatient}
+                    className="px-6 py-3.5 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 transition-all duration-200 font-bold flex items-center gap-2"
+                  >
+                    Call Next Patient
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+              <div className="divide-y divide-slate-100">
+                {waitingPatients.length === 0 ? (
+                  <div className="px-8 py-16 text-center text-slate-400">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="font-medium">No patients waiting</p>
+                  </div>
+                ) : (
+                  waitingPatients.map((patient, index) => (
+                    <div key={patient.id} className="px-8 py-6 hover:bg-slate-50/50 transition-colors">
+                      <div className="flex items-center gap-6">
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-xl font-bold text-slate-800 mb-2">{patient.name}</div>
+                          <div className="space-y-1.5 text-sm text-slate-600">
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 text-slate-400" />
+                              <span className="font-medium">Appointment: {patient.appointmentTime}</span>
+                            </div>
+                            {patient.reason && (
+                              <div className="text-slate-500">Reason: {patient.reason}</div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ClinicQueueManager;
